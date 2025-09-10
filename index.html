@@ -8,26 +8,27 @@
     body {
       background: #111;
       margin: 0;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
       overflow: hidden;
     }
     .container {
       position: relative;
       width: 100vw;
       max-width: 400px;
+      aspect-ratio: 9/16;
     }
     video {
       width: 100%;
-      height: auto;
+      height: 100%;
+      object-fit: contain;
       display: block;
       background: #000;
       border-radius: 16px;
-      pointer-events: none; /* el video NO recibe clics */
-      object-fit: contain;
+      pointer-events: none; /* NO recibe clicks */
     }
     .arrow-btn {
       position: absolute;
@@ -42,7 +43,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.18);
       border: none;
       cursor: pointer;
-      z-index: 2;
+      z-index: 10;
       transition: opacity 0.3s;
       opacity: 0;
       pointer-events: none;
@@ -56,12 +57,8 @@
       height: 28px;
       fill: #222;
     }
-    #arrow-right {
-      right: 10vw;
-    }
-    #arrow-left {
-      left: 10vw;
-    }
+    #arrow-right { right: 10vw; }
+    #arrow-left  { left: 10vw; }
   </style>
 </head>
 <body>
@@ -71,25 +68,22 @@
       Tu navegador no soporta videos.
     </video>
     <button id="arrow-right" class="arrow-btn" aria-label="Avanzar">
-      <!-- Flecha Derecha -->
       <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
     </button>
     <button id="arrow-left" class="arrow-btn" aria-label="Retroceder">
-      <!-- Flecha Izquierda -->
       <svg viewBox="0 0 24 24"><path d="M16 19V5l-11 7z"/></svg>
     </button>
   </div>
   <script>
-    // Tiempos clave
+    // Tiempos de pausa
     const PAUSAS_DERECHA = [11, 12, 13, 14];
     const PAUSAS_IZQUIERDA = [16, 18, 20];
 
     const video = document.getElementById('videoXV');
     const rightArrow = document.getElementById('arrow-right');
     const leftArrow = document.getElementById('arrow-left');
-    const container = document.querySelector('.container');
 
-    let etapa = 0;      // 0: espera inicio, 1: click para avanzar, 2: secuencia derecha, 3: secuencia izquierda
+    let etapa = 0;      // 0: inicio, 1: click para avanzar, 2: derecha, 3: izquierda
     let derechaIndex = 0;
     let izquierdaIndex = 0;
     let esperandoClick = false;
@@ -100,12 +94,15 @@
       video.currentTime = 0;
       setTimeout(() => {
         video.play();
-        setTimeout(() => {
-          video.pause();
-          video.currentTime = 1;
-          etapa = 1;
-          esperandoClick = true;
-        }, 1000); // Espera hasta el segundo 1
+        // Pausa en el segundo 1
+        video.addEventListener('timeupdate', function pausaEn1() {
+          if (video.currentTime >= 1 && etapa === 0) {
+            video.pause();
+            etapa = 1;
+            esperandoClick = true;
+            video.removeEventListener('timeupdate', pausaEn1);
+          }
+        });
       }, 1000); // Espera 1 segundo antes de reproducir
     });
 
@@ -115,13 +112,12 @@
         esperandoClick = false;
         etapa = 2;
         video.play();
+        derechaIndex = 0;
         // Pausa en el segundo 8
         video.addEventListener('timeupdate', function pausaEn8() {
-          if (video.currentTime >= 8) {
+          if (video.currentTime >= 8 && etapa === 2 && derechaIndex === 0) {
             video.pause();
-            video.currentTime = 8;
             rightArrow.classList.add('visible');
-            derechaIndex = 0;
             video.removeEventListener('timeupdate', pausaEn8);
           }
         });
@@ -132,77 +128,65 @@
     // ---- Secuencia clicks DERECHA ----
     rightArrow.addEventListener('click', () => {
       if (etapa === 2 && derechaIndex < PAUSAS_DERECHA.length) {
-        video.currentTime = PAUSAS_DERECHA[derechaIndex];
+        derechaIndex++;
+        rightArrow.classList.remove('visible');
         video.play();
-        setTimeout(() => {
-          video.pause();
-          video.currentTime = PAUSAS_DERECHA[derechaIndex];
-          derechaIndex++;
-          if (derechaIndex === PAUSAS_DERECHA.length) {
-            rightArrow.classList.remove('visible');
-            leftArrow.classList.add('visible');
-            etapa = 3;
-            izquierdaIndex = 0;
-            clicksDerechaCompletos = true;
+        // Pausa en el siguiente tiempo
+        video.addEventListener('timeupdate', function pausaSecuenciaDerecha() {
+          if (video.currentTime >= PAUSAS_DERECHA[derechaIndex - 1]) {
+            video.pause();
+            if (derechaIndex < PAUSAS_DERECHA.length) {
+              rightArrow.classList.add('visible');
+            } else {
+              leftArrow.classList.add('visible');
+              etapa = 3;
+              izquierdaIndex = 0;
+              clicksDerechaCompletos = true;
+            }
+            video.removeEventListener('timeupdate', pausaSecuenciaDerecha);
           }
-        }, 300);
+        });
       }
     });
 
     // ---- Secuencia clicks IZQUIERDA ----
     leftArrow.addEventListener('click', () => {
       if (etapa === 3 && izquierdaIndex < PAUSAS_IZQUIERDA.length) {
-        video.currentTime = PAUSAS_IZQUIERDA[izquierdaIndex];
+        izquierdaIndex++;
+        leftArrow.classList.remove('visible');
         video.play();
-        setTimeout(() => {
-          video.pause();
-          video.currentTime = PAUSAS_IZQUIERDA[izquierdaIndex];
-          izquierdaIndex++;
-          // Cuando llega al final del video
-          if (izquierdaIndex === PAUSAS_IZQUIERDA.length) {
-            leftArrow.classList.remove('visible');
-            // Reinicia desde el segundo 8 como pediste
-            setTimeout(() => {
-              video.currentTime = 8;
-              video.pause();
-              etapa = 2;
-              derechaIndex = 0;
-              izquierdaIndex = 0;
-              clicksDerechaCompletos = false;
-              rightArrow.classList.add('visible');
-              leftArrow.classList.remove('visible');
-            }, 600);
+        video.addEventListener('timeupdate', function pausaSecuenciaIzquierda() {
+          if (video.currentTime >= PAUSAS_IZQUIERDA[izquierdaIndex - 1]) {
+            video.pause();
+            if (izquierdaIndex < PAUSAS_IZQUIERDA.length) {
+              leftArrow.classList.add('visible');
+            } else {
+              // Reinicia desde el segundo 8
+              setTimeout(() => {
+                video.currentTime = 8;
+                etapa = 2;
+                derechaIndex = 0;
+                izquierdaIndex = 0;
+                clicksDerechaCompletos = false;
+                rightArrow.classList.add('visible');
+                leftArrow.classList.remove('visible');
+                video.pause();
+              }, 600);
+            }
+            video.removeEventListener('timeupdate', pausaSecuenciaIzquierda);
           }
-        }, 300);
+        });
       }
     });
 
-    // ---- Control de flechas ----
-    function actualizaFlechas() {
-      if (etapa === 2 && derechaIndex < PAUSAS_DERECHA.length) {
-        rightArrow.classList.add('visible');
-        leftArrow.classList.remove('visible');
-      }
-      if (etapa === 3 && clicksDerechaCompletos) {
-        rightArrow.classList.remove('visible');
-        leftArrow.classList.add('visible');
-      }
-      if (etapa === 3 && izquierdaIndex >= PAUSAS_IZQUIERDA.length) {
-        rightArrow.classList.remove('visible');
-        leftArrow.classList.remove('visible');
-      }
-    }
-    setInterval(actualizaFlechas, 180);
-
-    // El video nunca debe mostrar controles
+    // Oculta controles nativos del video
     video.controls = false;
     video.setAttribute('controls', false);
     video.muted = true;
     video.setAttribute('muted', 'muted');
     video.setAttribute('playsinline', '');
 
-    // Para evitar zooms y mantener las dimensiones
-    video.style.objectFit = "contain";
+    // No hay cortes ni saltos, el video solo se pausa donde corresponde y sigue normal al click.
   </script>
 </body>
 </html>
