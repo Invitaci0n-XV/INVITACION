@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Invitación XV Interactiva</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background: #111;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      position: relative;
+      width: 100vw;
+      max-width: 400px;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #000;
+      border-radius: 16px;
+      pointer-events: none; /* el video NO recibe clics */
+      object-fit: contain;
+    }
+    .arrow-btn {
+      position: absolute;
+      bottom: 8vw;
+      width: 44px;
+      height: 44px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      border: none;
+      cursor: pointer;
+      z-index: 2;
+      transition: opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .arrow-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .arrow-btn svg {
+      width: 28px;
+      height: 28px;
+      fill: #222;
+    }
+    #arrow-right {
+      right: 10vw;
+    }
+    #arrow-left {
+      left: 10vw;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <video id="videoXV" preload="auto" playsinline muted>
+      <source src="invitacion-xv.mp4" type="video/mp4">
+      Tu navegador no soporta videos.
+    </video>
+    <button id="arrow-right" class="arrow-btn" aria-label="Avanzar">
+      <!-- Flecha Derecha -->
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button id="arrow-left" class="arrow-btn" aria-label="Retroceder">
+      <!-- Flecha Izquierda -->
+      <svg viewBox="0 0 24 24"><path d="M16 19V5l-11 7z"/></svg>
+    </button>
+  </div>
+  <script>
+    // Tiempos clave
+    const PAUSAS_DERECHA = [11, 12, 13, 14];
+    const PAUSAS_IZQUIERDA = [16, 18, 20];
+
+    const video = document.getElementById('videoXV');
+    const rightArrow = document.getElementById('arrow-right');
+    const leftArrow = document.getElementById('arrow-left');
+    const container = document.querySelector('.container');
+
+    let etapa = 0;      // 0: espera inicio, 1: click para avanzar, 2: secuencia derecha, 3: secuencia izquierda
+    let derechaIndex = 0;
+    let izquierdaIndex = 0;
+    let esperandoClick = false;
+    let clicksDerechaCompletos = false;
+
+    // ---- Al cargar, espera 1s y pausa en 1s ----
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = 0;
+      setTimeout(() => {
+        video.play();
+        setTimeout(() => {
+          video.pause();
+          video.currentTime = 1;
+          etapa = 1;
+          esperandoClick = true;
+        }, 1000); // Espera hasta el segundo 1
+      }, 1000); // Espera 1 segundo antes de reproducir
+    });
+
+    // ---- Espera click para avanzar hasta 8s ----
+    document.body.addEventListener('click', function handleFirstClick(e) {
+      if (etapa === 1 && esperandoClick) {
+        esperandoClick = false;
+        etapa = 2;
+        video.play();
+        // Pausa en el segundo 8
+        video.addEventListener('timeupdate', function pausaEn8() {
+          if (video.currentTime >= 8) {
+            video.pause();
+            video.currentTime = 8;
+            rightArrow.classList.add('visible');
+            derechaIndex = 0;
+            video.removeEventListener('timeupdate', pausaEn8);
+          }
+        });
+        document.body.removeEventListener('click', handleFirstClick);
+      }
+    });
+
+    // ---- Secuencia clicks DERECHA ----
+    rightArrow.addEventListener('click', () => {
+      if (etapa === 2 && derechaIndex < PAUSAS_DERECHA.length) {
+        video.currentTime = PAUSAS_DERECHA[derechaIndex];
+        video.play();
+        setTimeout(() => {
+          video.pause();
+          video.currentTime = PAUSAS_DERECHA[derechaIndex];
+          derechaIndex++;
+          if (derechaIndex === PAUSAS_DERECHA.length) {
+            rightArrow.classList.remove('visible');
+            leftArrow.classList.add('visible');
+            etapa = 3;
+            izquierdaIndex = 0;
+            clicksDerechaCompletos = true;
+          }
+        }, 300);
+      }
+    });
+
+    // ---- Secuencia clicks IZQUIERDA ----
+    leftArrow.addEventListener('click', () => {
+      if (etapa === 3 && izquierdaIndex < PAUSAS_IZQUIERDA.length) {
+        video.currentTime = PAUSAS_IZQUIERDA[izquierdaIndex];
+        video.play();
+        setTimeout(() => {
+          video.pause();
+          video.currentTime = PAUSAS_IZQUIERDA[izquierdaIndex];
+          izquierdaIndex++;
+          // Cuando llega al final del video
+          if (izquierdaIndex === PAUSAS_IZQUIERDA.length) {
+            leftArrow.classList.remove('visible');
+            // Reinicia desde el segundo 8 como pediste
+            setTimeout(() => {
+              video.currentTime = 8;
+              video.pause();
+              etapa = 2;
+              derechaIndex = 0;
+              izquierdaIndex = 0;
+              clicksDerechaCompletos = false;
+              rightArrow.classList.add('visible');
+              leftArrow.classList.remove('visible');
+            }, 600);
+          }
+        }, 300);
+      }
+    });
+
+    // ---- Control de flechas ----
+    function actualizaFlechas() {
+      if (etapa === 2 && derechaIndex < PAUSAS_DERECHA.length) {
+        rightArrow.classList.add('visible');
+        leftArrow.classList.remove('visible');
+      }
+      if (etapa === 3 && clicksDerechaCompletos) {
+        rightArrow.classList.remove('visible');
+        leftArrow.classList.add('visible');
+      }
+      if (etapa === 3 && izquierdaIndex >= PAUSAS_IZQUIERDA.length) {
+        rightArrow.classList.remove('visible');
+        leftArrow.classList.remove('visible');
+      }
+    }
+    setInterval(actualizaFlechas, 180);
+
+    // El video nunca debe mostrar controles
+    video.controls = false;
+    video.setAttribute('controls', false);
+    video.muted = true;
+    video.setAttribute('muted', 'muted');
+    video.setAttribute('playsinline', '');
+
+    // Para evitar zooms y mantener las dimensiones
+    video.style.objectFit = "contain";
+  </script>
+</body>
+</html>
